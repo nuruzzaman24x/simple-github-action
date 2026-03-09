@@ -8,6 +8,7 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -26,6 +27,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build-and-push
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -36,6 +38,7 @@ jobs:
           chmod 600 mumbai.pem
 
           ssh -o StrictHostKeyChecking=no -i mumbai.pem ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} << 'EOF'
+
             # Install Docker if not installed
             if ! command -v docker &> /dev/null
             then
@@ -49,20 +52,18 @@ jobs:
               echo "Docker already installed"
             fi
 
-            # Create network
-            docker network create app_network || true
+            # Create Docker network and volume
+            sudo docker network create app_network || true
+            sudo docker volume create mysql_data || true
 
-            # Create volume for MySQL
-            docker volume create mysql_data || true
+            # Stop and remove old containers
+            sudo docker stop mysql-db || true
+            sudo docker rm mysql-db || true
+            sudo docker stop flask-app || true
+            sudo docker rm flask-app || true
 
-            # Stop old containers
-            docker stop mysql-db || true
-            docker rm mysql-db || true
-            docker stop flask-app || true
-            docker rm flask-app || true
-
-            # Run MySQL with volume
-            docker run -d \
+            # Run MySQL container
+            sudo docker run -d \
               --name mysql-db \
               --network app_network \
               -v mysql_data:/var/lib/mysql \
@@ -74,12 +75,12 @@ jobs:
             echo "Waiting for MySQL..."
             sleep 30
 
-            # Pull latest Flask image
-            docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-            docker pull ${{ secrets.DOCKER_USERNAME }}/flask-attendance-app
+            # DockerHub login and pull Flask image
+            sudo docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+            sudo docker pull ${{ secrets.DOCKER_USERNAME }}/flask-attendance-app
 
             # Run Flask container
-            docker run -d \
+            sudo docker run -d \
               --name flask-app \
               --network app_network \
               -p 5000:5000 \
@@ -88,4 +89,5 @@ jobs:
               -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
               -e DB_NAME=${{ secrets.DB_NAME }} \
               ${{ secrets.DOCKER_USERNAME }}/flask-attendance-app
+
           EOF
