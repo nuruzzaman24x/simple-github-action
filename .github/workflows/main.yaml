@@ -148,6 +148,9 @@ jobs:
           else
             echo "Docker already installed"
           fi
+          # Add current user to docker group
+          sudo usermod -aG docker $USER
+          sudo newgrp docker
 
           # Go to project directory
           cd ~/simple-github-action
